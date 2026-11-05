@@ -1068,16 +1068,14 @@ function drawIdle(pad, pw, ph, now) {
   ctx.restore();
 }
 
-let lastScroll = -Infinity;
 let screenOnView = true;
-addEventListener("scroll", () => { lastScroll = performance.now(); }, { passive: true });
 new IntersectionObserver(([entry]) => { screenOnView = entry.isIntersecting; }).observe(document.querySelector(".screen"));
 
-/** Redraws the idle sweep, except while the page is scrolling or the screen is out of view. */
+/** Redraws the idle sweep while the screen is in view. */
 function idleLoop(now) {
   idleFrame = null;
   if (history.length || ACTIVE.has(state)) return;
-  if (screenOnView && now - lastScroll > 150) draw(now);
+  if (screenOnView) draw(now);
   if (!reduceMotion.matches) idleFrame = requestAnimationFrame(idleLoop);
 }
 
