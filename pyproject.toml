@@ -3,6 +3,8 @@ name = "swarmscope"
 version = "0.1.0"
 description = "Desktop load tester for your own sites, built on Locust"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "locust>=2.47",
     "patchright>=1.64.4",
