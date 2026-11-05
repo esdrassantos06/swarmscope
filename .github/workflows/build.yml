@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: Swarmscope-macos-arm64
+          - os: windows-latest
+            artifact: Swarmscope-windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - run: uv sync --locked
+
+      - run: uv run ruff check .
+
+      - run: uv run ruff format --check .
+
+      - run: uv run pytest
+
+      - run: uv run python build.py
+
+      - name: Zip macOS app
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/Swarmscope.app ${{ matrix.artifact }}.zip
+
+      - name: Zip Windows app
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/Swarmscope -DestinationPath ${{ matrix.artifact }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip

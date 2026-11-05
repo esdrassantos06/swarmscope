@@ -1,0 +1,1335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Swarmscope</title>
+<link rel="preload" href="ui/fonts/doto.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="ui/fonts/martian-mono.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face {
+  font-family: "Doto";
+  src: url("ui/fonts/doto.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Martian Mono";
+  src: url("ui/fonts/martian-mono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+:root {
+  --bg: #0c0b09;
+  --panel: #171512;
+  --panel-2: #12100e;
+  --well: #0a0908;
+  --line: #2a251f;
+  --line-hi: #3a332a;
+  --tick: #554e44;
+  --ink: #ebe3d4;
+  --soft: #b8af9f;
+  --dim: #8f8677;
+  --amber: #ffb238;
+  --amber-deep: #c9821a;
+  --amber-wash: rgba(255, 178, 56, 0.12);
+  --red: #ff5b3d;
+  --red-wash: rgba(255, 91, 61, 0.12);
+  --cyan: #6fd6c8;
+  --green: #a7e46d;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --dots: "Doto", "Martian Mono", ui-monospace, monospace;
+  --r: 6px;
+  --bar-h: 64px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+html { scrollbar-color: var(--line-hi) var(--bg); }
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg);
+  background:
+    radial-gradient(1200px 600px at 78% -10%, rgba(255, 178, 56, 0.06), transparent 60%),
+    var(--bg);
+  color: var(--ink);
+  font: 400 12px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--amber); color: #1a1206; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 5px; border: 2px solid var(--bg); }
+
+a, button, input, textarea { -webkit-tap-highlight-color: transparent; }
+
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: var(--bar-h);
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(var(--panel), var(--panel-2));
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { display: flex; align-items: baseline; gap: 12px; }
+
+.word { font: 900 26px/1 var(--dots); letter-spacing: 0.06em; color: var(--amber); }
+
+.model {
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line-hi);
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.12em;
+}
+
+.led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tick);
+  align-self: center;
+}
+
+.led[data-state="running"], .led[data-state="spawning"] { background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+.led[data-state="stopping"], .led[data-state="cleanup"] { background: var(--amber); }
+.led[data-state="offline"] { background: var(--red); }
+
+.target { flex: 1; min-width: 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.target b { color: var(--ink); font-weight: 400; }
+
+.state { display: flex; gap: 16px; align-items: center; }
+.state-label { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--soft); }
+.clock { font: 600 22px/1 var(--dots); color: var(--ink); letter-spacing: 0.08em; min-width: 5ch; text-align: right; }
+
+.bar-stop {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #1a0703;
+  background: var(--red);
+  border: 0;
+  border-radius: 4px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+
+.bar-stop:hover { filter: brightness(1.08); }
+.bar-stop[hidden] { display: none; }
+
+.deck {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) 1fr;
+  gap: 20px;
+  padding: 20px 28px 32px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.rack { display: flex; flex-direction: column; gap: 14px; }
+
+.panel {
+  position: relative;
+  background: linear-gradient(170deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 18px 18px;
+}
+
+.rise .panel, .rise .fire-dock { animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 40ms); }
+
+.screw::before, .screw::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #4a4238, #1d1a16);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.screw::before { left: 7px; }
+.screw::after { right: 7px; }
+
+h2 {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h2::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line-hi), transparent); }
+
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 12px; }
+.grid.three { grid-template-columns: repeat(3, 1fr); }
+
+.field { display: flex; flex-direction: column; gap: 6px; position: relative; min-width: 0; }
+.field + .field { margin-top: 12px; }
+.grid .field + .field { margin-top: 0; }
+
+.field > span { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.field > span em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--dim); margin-left: 6px; }
+.hint { font-size: 12px; color: var(--dim); line-height: 1.45; margin: 10px 0 0; }
+
+input, textarea {
+  width: 100%;
+  font: 400 13px/1.4 var(--mono);
+  color: var(--ink);
+  background: var(--well);
+  border: 1px solid var(--line-hi);
+  border-radius: 4px;
+  padding: 9px 10px;
+  caret-color: var(--amber);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+  transition: border-color 0.15s;
+  scroll-margin-top: calc(var(--bar-h) + 24px);
+}
+
+textarea { resize: vertical; min-height: 64px; }
+
+.field i { position: absolute; right: 10px; top: 33px; font-style: normal; font-size: 11px; color: var(--dim); pointer-events: none; }
+.field:has(i) input { padding-right: 40px; }
+
+input::placeholder, textarea::placeholder { color: var(--dim); }
+input:hover, textarea:hover { border-color: var(--tick); }
+input:focus-visible, textarea:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; border-color: var(--amber-deep); }
+input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--red); background: linear-gradient(var(--red-wash), var(--red-wash)), var(--well); }
+
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.host input { font-size: 15px; padding: 12px; }
+
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+fieldset:disabled .field, fieldset:disabled .presets { opacity: 0.7; }
+
+.presets { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.presets span { font-size: 11px; color: var(--dim); align-self: center; margin-right: 2px; }
+
+.chip-btn {
+  font: 400 11px/1 var(--mono);
+  color: var(--soft);
+  background: var(--well);
+  border: 1px solid var(--line-hi);
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.chip-btn:hover { color: var(--ink); border-color: var(--tick); }
+.chip-btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber-deep); }
+
+.estimate { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-hi); display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline; }
+.estimate dt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.estimate dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.estimate dd small { color: var(--dim); font-size: 12px; }
+.estimate[data-level="open"] dd { color: var(--amber); }
+
+.toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; cursor: pointer; color: var(--ink); }
+.toggle input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--amber); box-shadow: none; flex: none; }
+.toggle em { display: block; font-style: normal; color: var(--dim); font-size: 12px; margin-top: 2px; }
+
+.fire-dock {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+  margin-top: -14px;
+  padding: 22px 0 16px;
+  background: linear-gradient(rgba(12, 11, 9, 0), var(--bg) 22px);
+  --i: 4;
+}
+
+.error { margin: 0; min-height: 1.5em; color: var(--red); font-size: 12px; }
+
+.fire {
+  position: relative;
+  height: 64px;
+  border: 0;
+  border-radius: var(--r);
+  cursor: pointer;
+  font: 900 26px/1 var(--dots);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffc65e, var(--amber) 45%, var(--amber-deep));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.28),
+    0 2px 3px rgba(0, 0, 0, 0.6),
+    0 14px 26px -10px rgba(0, 0, 0, 0.9);
+  transition: transform 0.08s, box-shadow 0.08s, filter 0.2s;
+}
+
+.fire:hover { filter: brightness(1.06); }
+.fire:active { transform: translateY(3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.6), 0 6px 14px -8px rgba(0, 0, 0, 0.9); }
+.fire:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.fire:disabled { cursor: progress; filter: saturate(0.4) brightness(0.8); }
+.fire[data-mode="stop"] { color: #1a0703; background: linear-gradient(180deg, #ff8068, var(--red) 45%, #c23a20); }
+
+.keys { margin: 0; text-align: center; font-size: 11px; color: var(--dim); }
+.keys kbd { font: inherit; color: var(--soft); border: 1px solid var(--line-hi); border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; }
+
+.scope { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.readouts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+
+.readout { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; transition: opacity 0.3s; }
+.readouts[data-live="false"] .readout { opacity: 0.55; }
+
+.r-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--soft); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.r-label::before { content: ""; width: 10px; height: 2px; background: currentColor; border-radius: 1px; flex: none; }
+
+.r-value { font: 900 clamp(32px, 3.6vw, 58px)/1 var(--dots); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.frac, .unit { font-family: var(--mono); font-weight: 400; letter-spacing: 0; }
+.frac { font-size: 0.42em; color: var(--soft); }
+.unit { font-size: 0.3em; color: var(--dim); margin-left: 6px; }
+
+.amber .r-label, .amber .r-value { color: var(--amber); }
+.cyan .r-label { color: var(--cyan); }
+.red .r-label { color: var(--red); }
+.red .r-value.hot { color: var(--red); }
+.green .r-label { color: var(--green); }
+.green .r-value.hot { color: var(--red); }
+
+.screen {
+  position: relative;
+  height: clamp(260px, 38vh, 420px);
+  padding: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #13110d 0%, #090807 75%);
+  border: 1px solid var(--line-hi);
+  box-shadow: inset 0 0 0 6px #0f0d0b, inset 0 0 60px rgba(0, 0, 0, 0.9);
+}
+
+.screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.scanlines { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); }
+
+.legend { position: absolute; left: 18px; bottom: 14px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--soft); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend span::before { content: ""; width: 14px; height: 2px; background: var(--c); }
+.legend .dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+
+.overlay { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px; color: var(--dim); pointer-events: none; transition: opacity 0.3s; }
+.overlay[hidden] { display: grid; opacity: 0; visibility: hidden; }
+.overlay strong { font: 900 30px/1 var(--dots); letter-spacing: 0.2em; color: var(--soft); }
+
+.verdict {
+  position: absolute;
+  inset: 44px 18px auto auto;
+  width: min(420px, calc(100% - 36px));
+  padding: 16px 18px;
+  background: rgba(18, 16, 14, 0.94);
+  border: 1px solid var(--line-hi);
+  border-radius: var(--r);
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+  transition: opacity 0.3s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.verdict[hidden] { display: block; opacity: 0; visibility: hidden; transform: translateY(-6px); pointer-events: none; }
+.verdict h3 { margin: 0 0 4px; font: 900 22px/1.1 var(--dots); color: var(--amber); letter-spacing: 0.04em; }
+.verdict .lede { margin: 0 0 12px; color: var(--soft); }
+.verdict dl { margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 14px; }
+.verdict dt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.verdict dd { margin: 2px 0 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.verdict dd.bad { color: var(--red); }
+.verdict .prev { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line-hi); color: var(--dim); font-size: 12px; }
+
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.chip { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 11px 16px; }
+.chip span { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.chip b { font: 600 18px/1 var(--dots); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.lower { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; align-items: start; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 8px 12px; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+td { padding: 8px 0 8px 12px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+td:first-child { color: var(--ink); max-width: 0; width: 36%; overflow: hidden; text-overflow: ellipsis; }
+td.bad { color: var(--red); font-weight: 600; }
+.empty td { color: var(--dim); text-align: left; }
+
+.alert { margin: 0 0 14px; padding: 10px 12px; border-radius: 4px; background: var(--red-wash); color: var(--ink); border: 1px solid rgba(255, 91, 61, 0.4); }
+.alert[hidden] { display: none; }
+.pageload .hint { margin: -4px 0 12px; }
+.pageload .hint b { color: var(--ink); font-weight: 400; }
+.alert b { color: var(--red); font-weight: 600; }
+
+.pushback dl { margin: 0 0 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pushback dl div { display: flex; flex-direction: column; gap: 4px; }
+.pushback dt { font-size: 11px; letter-spacing: 0.08em; color: var(--dim); white-space: nowrap; }
+.pushback dd { margin: 0; font: 900 26px/1 var(--dots); color: var(--ink); }
+.pushback dd.warn { color: var(--amber); }
+.pushback dd.bad { color: var(--red); }
+
+.errors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 240px; overflow: auto; }
+.errors li { display: grid; grid-template-columns: 4ch 1fr; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); }
+.errors li b { font-weight: 600; color: var(--amber); font-variant-numeric: tabular-nums; text-align: right; }
+.errors li span { color: var(--soft); overflow-wrap: anywhere; }
+.errors li code { font: inherit; color: var(--ink); margin-right: 10px; }
+.errors li.calm { color: var(--dim); border: 0; display: block; }
+
+.foot { display: flex; gap: 24px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+.note { margin: 0; max-width: 64ch; color: var(--dim); font-size: 12px; }
+.links { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.links a { color: var(--soft); text-decoration: underline; text-decoration-color: var(--tick); text-underline-offset: 4px; }
+.links a:hover { color: var(--amber); text-decoration-color: var(--amber); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 50% { opacity: 0.45; } }
+
+@media (max-width: 1280px) {
+  .readouts { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 1100px) {
+  .deck { grid-template-columns: 1fr; }
+  .fire-dock { position: static; margin-top: 0; padding: 0; background: none; }
+  .lower { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  :root { --bar-h: 56px; }
+  .bar { padding: 10px 16px; gap: 12px; }
+  .model, .target, .keys { display: none; }
+  .word { font-size: 20px; }
+  .clock { font-size: 18px; }
+  .deck { padding: 16px; }
+  .readouts, .strip { grid-template-columns: repeat(2, 1fr); }
+  .grid.three { grid-template-columns: repeat(2, 1fr); }
+  .screen:has(.verdict:not([hidden])) { height: auto; }
+  .screen:has(.verdict:not([hidden])) .legend { display: none; }
+  .verdict { position: relative; inset: auto; width: auto; margin: 12px; }
+  .verdict[hidden] { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="led" id="led" aria-hidden="true"></span>
+    <span class="word">SWARMSCOPE</span>
+    <span class="model">MK I</span>
+  </div>
+  <div class="target" id="target">No target set</div>
+  <div class="state">
+    <span class="state-label" id="state" role="status" aria-live="polite">Idle</span>
+    <span class="clock" id="clock" aria-label="Elapsed time">00:00</span>
+    <button class="bar-stop" id="bar-stop" type="button" hidden>Stop</button>
+  </div>
+</header>
+
+<main class="deck">
+  <form class="rack" id="rack" novalidate>
+    <fieldset id="controls">
+      <section class="panel screw" style="--i:0">
+        <h2>Target</h2>
+        <label class="field host">
+          <span>URL</span>
+          <input name="host" type="url" placeholder="https://yoursite.com" autocomplete="off" spellcheck="false" list="recent-hosts" required>
+        </label>
+        <datalist id="recent-hosts"></datalist>
+        <label class="field">
+          <span>Paths <em>comma or one per line</em></span>
+          <textarea name="paths" rows="3" spellcheck="false">/</textarea>
+        </label>
+      </section>
+
+      <section class="panel screw" style="--i:1">
+        <h2>Load</h2>
+        <div class="presets" role="group" aria-label="Load presets">
+          <span>Preset</span>
+          <button class="chip-btn" type="button" data-users="50" data-ramp="10">Smoke 50</button>
+          <button class="chip-btn" type="button" data-users="1000" data-ramp="25">1,000</button>
+          <button class="chip-btn" type="button" data-users="3000" data-ramp="50">3,000</button>
+        </div>
+        <div class="grid three">
+          <label class="field"><span>Users</span><input name="user_count" type="number" min="1" step="1" value="300" inputmode="numeric"></label>
+          <label class="field"><span>Ramp</span><input name="spawn_rate" type="number" min="0.1" step="any" value="10" aria-describedby="ramp-hint"><i>/s</i></label>
+          <label class="field"><span>Duration</span><input name="run_time" type="text" value="5m" placeholder="until Stop" spellcheck="false" aria-describedby="duration-hint"></label>
+        </div>
+        <p class="hint" id="ramp-hint">Ramp adds that many users per second until the peak.</p>
+        <p class="hint" id="duration-hint">Duration takes 90s, 5m or 1h30m. Leave it empty to run until you press Stop.</p>
+        <dl class="estimate" id="estimate" aria-live="off">
+          <dt>Rate</dt><dd id="e-rate">0</dd>
+          <dt>Requests</dt><dd id="e-total">0</dd>
+        </dl>
+        <label class="toggle"><input type="checkbox" name="probe" checked><span>Measure real page load every 15 s<em>Opens the page in your installed Chrome or Edge, first with no load as a baseline, then while the crowd runs.</em></span></label>
+      </section>
+
+      <section class="panel screw" style="--i:2">
+        <h2>Pacing and retry</h2>
+        <div class="grid">
+          <label class="field"><span>Delay min</span><input name="delay_min" type="number" min="0" step="any" value="3"><i>s</i></label>
+          <label class="field"><span>Delay max</span><input name="delay_max" type="number" min="0" step="any" value="5"><i>s</i></label>
+          <label class="field"><span>Retries</span><input name="max_retries" type="number" min="0" max="10" step="1" value="3"><i>max</i></label>
+          <label class="field"><span>Backoff</span><input name="backoff" type="number" min="0" step="any" value="1" aria-describedby="backoff-hint"><i>s</i></label>
+        </div>
+        <p class="hint" id="backoff-hint">Each user waits a random delay between requests. A retry waits the backoff, then doubles it; a Retry-After header from the host wins.</p>
+      </section>
+    </fieldset>
+
+    <div class="fire-dock">
+      <p class="error" id="error" role="alert"></p>
+      <button class="fire" id="fire" type="submit" data-mode="start">Start</button>
+      <p class="keys"><kbd id="mod-key">Ctrl</kbd> <kbd>Enter</kbd> start · <kbd>Esc</kbd> stop</p>
+    </div>
+  </form>
+
+  <section class="scope" aria-label="Live results">
+    <div class="readouts" id="readouts" data-live="false">
+      <div class="panel readout amber" style="--i:1"><span class="r-label">Req/s</span><output class="r-value" id="r-rps">0</output></div>
+      <div class="panel readout" style="--i:2"><span class="r-label">Users</span><output class="r-value" id="r-users">0</output></div>
+      <div class="panel readout cyan" style="--i:3"><span class="r-label">P95</span><output class="r-value" id="r-p95">0</output></div>
+      <div class="panel readout red" style="--i:4"><span class="r-label">Errors</span><output class="r-value" id="r-err">0</output></div>
+      <div class="panel readout red" style="--i:5"><span class="r-label">Throttled</span><output class="r-value" id="r-429">0</output></div>
+      <div class="panel readout green" style="--i:6"><span class="r-label">Page LCP</span><output class="r-value" id="r-page">0</output></div>
+    </div>
+
+    <div class="panel screen" style="--i:6">
+      <canvas id="trace" role="img" aria-label="No run yet."></canvas>
+      <div class="scanlines" aria-hidden="true"></div>
+      <div class="overlay" id="nosignal"><strong>NO SIGNAL</strong><span>Set a target and press Start.</span></div>
+      <section class="verdict" id="verdict" hidden aria-labelledby="verdict-title">
+        <h3 id="verdict-title">Run complete</h3>
+        <p class="lede" id="verdict-lede"></p>
+        <dl id="verdict-stats"></dl>
+        <p class="prev" id="verdict-prev" hidden></p>
+      </section>
+      <div class="legend" aria-hidden="true">
+        <span style="--c: var(--amber)">req/s</span>
+        <span style="--c: var(--red)">fails/s</span>
+        <span class="dash" style="--c: var(--cyan)">p95 ms</span>
+        <span class="dash" style="--c: var(--red)">first 429</span>
+        <span style="--c: var(--green)">page LCP</span>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div class="panel chip" style="--i:7"><span>Requests</span><b id="s-reqs">0</b></div>
+      <div class="panel chip" style="--i:7"><span>Failed</span><b id="s-fails">0</b></div>
+      <div class="panel chip" style="--i:8"><span>Median</span><b id="s-median">0</b></div>
+      <div class="panel chip" style="--i:8"><span>Body data</span><b id="s-bytes">0</b></div>
+    </div>
+
+    <section class="panel screw pageload" id="pageload" style="--i:9">
+      <h2>Page load in a real browser</h2>
+      <p class="hint" id="probe-note">One fresh-cache visit every 15 s while the crowd runs. The first row is the baseline, measured before any load.</p>
+      <table>
+        <thead><tr><th scope="col">At</th><th scope="col">Users</th><th scope="col">TTFB</th><th scope="col">FCP</th><th scope="col">LCP</th><th scope="col">Load</th><th scope="col">Size</th><th scope="col">Reqs</th></tr></thead>
+        <tbody id="probe-rows"><tr class="empty"><td colspan="8">No page loads measured yet.</td></tr></tbody>
+      </table>
+    </section>
+
+    <div class="lower">
+      <section class="panel screw" style="--i:9">
+        <h2>Endpoints</h2>
+        <table>
+          <thead><tr><th scope="col">Path</th><th scope="col">Reqs</th><th scope="col">Fails</th><th scope="col">Med</th><th scope="col">P95</th><th scope="col">Max</th><th scope="col">Size</th></tr></thead>
+          <tbody id="rows"><tr class="empty"><td colspan="7">Waiting for traffic.</td></tr></tbody>
+        </table>
+      </section>
+      <section class="panel screw pushback" style="--i:10">
+        <h2>Pushback</h2>
+        <p class="alert" id="throttle-alert" hidden></p>
+        <dl>
+          <div><dt>Retries</dt><dd id="p-retries">0</dd></div>
+          <div><dt>HTTP 429</dt><dd id="p-429">0</dd></div>
+          <div><dt>5xx / network</dt><dd id="p-5xx">0</dd></div>
+        </dl>
+        <ul class="errors" id="errors"><li class="calm">No errors yet.</li></ul>
+      </section>
+    </div>
+
+    <footer class="foot">
+      <p class="note">These requests never run JavaScript, so Google Analytics won't count them. Check analytics with a few real visits or GA4 Measurement Protocol events.</p>
+      <nav class="links" aria-label="Downloads">
+        <a href="stats/requests/csv" target="_blank" rel="noopener">Requests CSV</a>
+        <a href="stats/failures/csv" target="_blank" rel="noopener">Failures CSV</a>
+        <a href="stats/report?download=1" target="_blank" rel="noopener">HTML report</a>
+        <a href="./" target="_blank" rel="noopener">Locust UI</a>
+      </nav>
+    </footer>
+  </section>
+</main>
+
+<script>
+const form = document.getElementById("rack");
+const el = (id) => document.getElementById(id);
+const STORE = "swarmscope:settings";
+const HOSTS = "swarmscope:hosts";
+const LAST_RUN = "swarmscope:last-run";
+const SAVED = ["host", "paths", "user_count", "spawn_rate", "run_time", "delay_min", "delay_max", "max_retries", "backoff"];
+const SWARM = ["user_count", "spawn_rate", "host", "paths", "delay_min", "delay_max", "max_retries", "backoff"];
+const ACTIVE = new Set(["spawning", "running"]);
+const STOPPING = new Set(["stopping", "cleanup"]);
+const STATE_TEXT = { ready: "Idle", spawning: "Ramping", running: "Running", stopping: "Stopping", cleanup: "Stopping", stopped: "Stopped", missing: "Idle", offline: "Engine offline" };
+const MAX_POINTS = 600;
+const RETRY_RE = /retry \d+\/\d+/;
+
+const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const whole = new Intl.NumberFormat("en");
+let history = [];
+let state = "ready";
+let startedAt = null;
+let elapsedAtStop = 0;
+let run = null;
+let firstThrottleIndex = null;
+let launchGraceUntil = 0;
+let shifted = 0;
+let lastUsers = 0;
+let probes = [];
+let probing = false;
+let probeTimer = null;
+let launching = false;
+const PROBE_EVERY_MS = 15000;
+
+const store = {
+  get(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  },
+};
+
+function bytes(n) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return `${n < 10 && i ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+}
+
+function mmss(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Writes a number in the dot-matrix face, with decimals and unit set in the text face so "." never reads as "+". */
+function dots(node, text, unit = "") {
+  const [int, frac] = String(text).split(".");
+  node.replaceChildren(int);
+  if (frac !== undefined) node.append(Object.assign(document.createElement("span"), { className: "frac", textContent: `.${frac}` }));
+  if (unit) node.append(Object.assign(document.createElement("span"), { className: "unit", textContent: unit }));
+}
+
+function seconds(text) {
+  const value = text.trim();
+  if (!value) return null;
+  if (/^\d+$/.test(value)) return Number(value);
+  const match = /^(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?$/i.exec(value);
+  return match && (match[1] || match[2] || match[3]) ? (+match[1] || 0) * 3600 + (+match[2] || 0) * 60 + (+match[3] || 0) : NaN;
+}
+
+function num(name) {
+  const value = parseFloat(form.elements[name].value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function estimate() {
+  const users = Math.max(num("user_count"), 0);
+  const ramp = Math.max(num("spawn_rate"), 0.1);
+  const pause = Math.max((num("delay_min") + num("delay_max")) / 2, 0) + 0.15;
+  const rate = users / pause;
+  const retries = Math.max(Math.round(num("max_retries")), 0);
+  const duration = seconds(form.elements.run_time.value);
+  const rampTime = users / ramp;
+  const box = el("estimate");
+
+  el("e-rate").textContent = `about ${compact.format(rate)} req/s at peak`;
+  if (duration == null || Number.isNaN(duration)) {
+    box.dataset.level = "open";
+    el("e-total").replaceChildren(`about ${compact.format(Math.round(rate * 60))} per minute until you press Stop`);
+    return;
+  }
+  box.dataset.level = "";
+  const total = duration <= rampTime ? (ramp * duration * duration) / 2 / pause : rate * (duration - rampTime / 2);
+  const worst = total * (1 + retries);
+  el("e-total").replaceChildren(`about ${compact.format(Math.round(total))}`);
+  if (retries) {
+    el("e-total").append(" ", Object.assign(document.createElement("small"), { textContent: `(up to ${compact.format(worst)} if every request retries)` }));
+  }
+}
+
+function validate() {
+  const host = form.elements.host.value.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\/[^\s/]+/i.test(host)) return ["host", "Enter a full URL, like https://yoursite.com"];
+  const users = num("user_count");
+  if (users < 1 || !Number.isInteger(users)) return ["user_count", "Users must be a whole number, 1 or more."];
+  if (num("spawn_rate") <= 0) return ["spawn_rate", "Ramp must be above 0 users per second."];
+  if (Number.isNaN(seconds(form.elements.run_time.value))) return ["run_time", "Duration looks like 90s, 5m or 1h30m. Leave it empty to run until you press Stop."];
+  if (num("delay_min") > num("delay_max")) return ["delay_max", "Delay max must be at least delay min."];
+  const retries = num("max_retries");
+  if (retries < 0 || retries > 10 || !Number.isInteger(retries)) return ["max_retries", "Retries must be a whole number from 0 to 10."];
+  if (num("backoff") < 0) return ["backoff", "Backoff can't be negative."];
+  return null;
+}
+
+function clearError() {
+  el("error").textContent = "";
+  for (const input of form.querySelectorAll("[aria-invalid]")) {
+    input.removeAttribute("aria-invalid");
+    const described = (input.getAttribute("aria-describedby") || "").replace("error", "").trim();
+    described ? input.setAttribute("aria-describedby", described) : input.removeAttribute("aria-describedby");
+  }
+}
+
+function showError(name, message, focus = true) {
+  clearError();
+  el("error").textContent = message;
+  if (!name) return;
+  const input = form.elements[name];
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", `${input.getAttribute("aria-describedby") || ""} error`.trim());
+  if (focus) {
+    input.focus({ preventScroll: true });
+    input.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+function restore() {
+  const saved = store.get(STORE, {});
+  for (const name of SAVED) if (saved[name] != null) form.elements[name].value = saved[name];
+  if (saved.probe != null) form.elements.probe.checked = saved.probe;
+  renderHosts();
+  showTarget(saved.host);
+  elapsedAtStop = (store.get(LAST_RUN, null)?.seconds || 0) * 1000;
+}
+
+function persist() {
+  store.set(STORE, { ...Object.fromEntries(SAVED.map((n) => [n, form.elements[n].value])), probe: form.elements.probe.checked });
+}
+
+function renderHosts() {
+  el("recent-hosts").replaceChildren(...store.get(HOSTS, []).map((value) => Object.assign(document.createElement("option"), { value })));
+}
+
+function rememberHost(host) {
+  store.set(HOSTS, [host, ...store.get(HOSTS, []).filter((h) => h !== host)].slice(0, 6));
+  renderHosts();
+}
+
+function showTarget(host) {
+  const target = el("target");
+  if (!host) { target.textContent = "No target set"; return; }
+  target.replaceChildren("Target ", Object.assign(document.createElement("b"), { textContent: host }));
+}
+
+function syncPresets() {
+  for (const button of document.querySelectorAll(".presets .chip-btn")) {
+    const on = form.elements.user_count.value === button.dataset.users && form.elements.spawn_rate.value === button.dataset.ramp;
+    button.setAttribute("aria-pressed", String(on));
+  }
+}
+
+function clock() {
+  el("clock").textContent = mmss((startedAt ? Date.now() - startedAt : elapsedAtStop) / 1000);
+}
+
+function setState(next) {
+  const wasActive = ACTIVE.has(state);
+  if (ACTIVE.has(next) && !startedAt) startedAt = Date.now();
+  if (!ACTIVE.has(next) && startedAt) { elapsedAtStop = Date.now() - startedAt; startedAt = null; }
+  state = next;
+  el("led").dataset.state = next;
+  el("state").textContent = STATE_TEXT[next] || next;
+
+  const running = ACTIVE.has(next);
+  const stopping = STOPPING.has(next);
+  el("controls").disabled = running || stopping;
+  el("bar-stop").hidden = !running;
+  const fire = el("fire");
+  fire.disabled = stopping || launching;
+  fire.dataset.mode = running ? "stop" : "start";
+  fire.textContent = launching ? "Starting" : stopping ? "Stopping" : running ? "Stop" : "Start";
+  if (launching && !running) el("state").textContent = form.elements.probe.checked ? "Measuring baseline" : "Starting";
+  el("readouts").dataset.live = String(running);
+  if (wasActive && !running && run) finishRun();
+}
+
+function statusOf(message) {
+  const match = /(?:HTTP |code=)(\d{3})/.exec(message);
+  return match ? Number(match[1]) : 0;
+}
+
+function cleanError(message) {
+  return message
+    .replace(/^CatchResponseError\('(.*)'\)$/, "$1")
+    .replace(/^LocustBadStatusCode\(code=(\d+)\)$/, "HTTP $1, gave up")
+    .replace(/^(\w+Error)\((.*)\)$/, "$1: $2");
+}
+
+/** Splits Locust's error table into retried attempts, throttling and hard failures. */
+function pushback(errors) {
+  const out = { retries: 0, throttled: 0, broken: 0 };
+  for (const e of errors) {
+    const code = statusOf(e.error);
+    if (RETRY_RE.test(e.error)) out.retries += e.occurrences;
+    if (code === 429) out.throttled += e.occurrences;
+    else if (code === 0 || code >= 500) out.broken += e.occurrences;
+  }
+  return out;
+}
+
+function errorRate(total, retries) {
+  const attempts = total.num_requests || 0;
+  const logical = Math.max(attempts - retries, 0);
+  const finalFails = Math.max((total.num_failures || 0) - retries, 0);
+  return { logical, finalFails, pct: logical ? (finalFails / logical) * 100 : 0 };
+}
+
+function pct(value) {
+  if (value > 0 && value < 1) return value.toFixed(1);
+  return value >= 10 ? String(Math.round(value)) : value.toFixed(1);
+}
+
+function renderPushback(errors, counts) {
+  const set = (id, value, cls) => { dots(el(id), whole.format(value)); el(id).className = value ? cls : ""; };
+  set("p-retries", counts.retries, "warn");
+  set("p-429", counts.throttled, "bad");
+  set("p-5xx", counts.broken, "bad");
+
+  const alert = el("throttle-alert");
+  if (ACTIVE.has(state) && counts.throttled && run?.first429 != null) {
+    alert.replaceChildren(Object.assign(document.createElement("b"), { textContent: "The host is throttling you" }), ` since ${mmss(run.first429)}. From here on you're measuring its rate limit, not your site.`);
+    alert.hidden = false;
+  } else {
+    alert.hidden = true;
+  }
+
+  const top = [...errors].sort((a, b) => b.occurrences - a.occurrences).slice(0, 12);
+  el("errors").replaceChildren(...(top.length ? top.map((e) => {
+    const li = document.createElement("li");
+    const text = document.createElement("span");
+    text.append(Object.assign(document.createElement("code"), { textContent: e.name }), cleanError(e.error));
+    li.append(Object.assign(document.createElement("b"), { textContent: compact.format(e.occurrences) }), text);
+    return li;
+  }) : [Object.assign(document.createElement("li"), { className: "calm", textContent: "No errors yet." })]));
+}
+
+function renderRows(stats) {
+  const rows = stats.filter((s) => s.name !== "Aggregated");
+  if (!rows.length) {
+    el("rows").replaceChildren(Object.assign(document.createElement("tr"), { className: "empty", innerHTML: '<td colspan="7">Waiting for traffic.</td>' }));
+    return;
+  }
+  el("rows").replaceChildren(...rows.map((s) => {
+    const tr = document.createElement("tr");
+    const cells = [s.name, whole.format(s.num_requests), whole.format(s.num_failures), Math.round(s.median_response_time || 0), Math.round(s["response_time_percentile_0.95"] || 0), Math.round(s.max_response_time || 0), bytes(s.avg_content_length || 0)];
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      if (i === 0) td.title = value;
+      if (i === 2 && s.num_failures) td.className = "bad";
+      tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+function trackRun(data, counts, err, p95) {
+  if (!run) return;
+  const users = data.user_count || 0;
+  const rps = data.current_rps || 0;
+  if (users > run.peakUsers || (users === run.peakUsers && p95 > run.p95AtPeak)) { run.peakUsers = users; run.p95AtPeak = p95; }
+  run.peakRps = Math.max(run.peakRps, rps);
+  run.maxP95 = Math.max(run.maxP95, p95);
+  if (counts.throttled && run.first429 == null) {
+    run.first429 = (Date.now() - run.startedAt) / 1000;
+    firstThrottleIndex = history.length - 1;
+  }
+  run.requests = err.logical;
+  run.attempts = (data.stats.at(-1) || {}).num_requests || 0;
+  run.errPct = err.pct;
+  run.throttled = counts.throttled;
+  run.retries = counts.retries;
+}
+
+/** The page-load number we headline: LCP when the browser reports one, else the load event. */
+function pageTime(probe) {
+  return probe.lcp ?? probe.load;
+}
+
+function secs(ms) {
+  return ms == null ? "n/a" : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)} s`;
+}
+
+function probeTarget() {
+  const host = form.elements.host.value.trim().replace(/\/+$/, "");
+  const first = form.elements.paths.value.replace(/\n/g, ",").split(",").map((p) => p.trim()).find(Boolean) || "/";
+  return host + "/" + first.replace(/^\/+/, "");
+}
+
+async function probeOnce(users) {
+  if (probing) return null;
+  probing = true;
+  const url = probeTarget();
+  const at = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+  const seq = history.length + shifted;
+  try {
+    const response = await fetch("ui/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+    const result = await response.json();
+    const entry = { ...result, url, at, users, seq };
+    if (result.ok || response.status !== 409) probes.push(entry);
+    renderProbes();
+    return entry;
+  } catch (error) {
+    const entry = { ok: false, error: `Page probe failed: ${error.message}`, url, at, users, seq };
+    probes.push(entry);
+    renderProbes();
+    return entry;
+  } finally {
+    probing = false;
+  }
+}
+
+function startProbing() {
+  stopProbing();
+  probeTimer = setInterval(() => { if (ACTIVE.has(state)) probeOnce(lastUsers); }, PROBE_EVERY_MS);
+}
+
+function stopProbing() {
+  clearInterval(probeTimer);
+  probeTimer = null;
+}
+
+function renderProbes() {
+  const ok = probes.filter((p) => p.ok);
+  const baseline = ok[0];
+  const latest = ok.at(-1);
+  if (latest) {
+    const ms = pageTime(latest);
+    ms < 1000 ? dots(el("r-page"), String(Math.round(ms)), "ms") : dots(el("r-page"), (ms / 1000).toFixed(1), "s");
+    el("r-page").classList.toggle("hot", ms > 2500 || (baseline && ms > pageTime(baseline) * 2));
+  }
+  const failed = probes.filter((p) => !p.ok).at(-1);
+  el("probe-note").textContent = failed && !latest ? failed.error : `One fresh-cache visit to ${probeTarget()} every 15 s while the crowd runs. The first row is the baseline, measured before any load.`;
+
+  if (!probes.length) {
+    el("probe-rows").replaceChildren(Object.assign(document.createElement("tr"), { className: "empty", innerHTML: '<td colspan="8">No page loads measured yet.</td>' }));
+    return;
+  }
+  el("probe-rows").replaceChildren(...[...probes].reverse().map((p) => {
+    const tr = document.createElement("tr");
+    if (!p.ok) {
+      tr.className = "empty";
+      tr.append(Object.assign(document.createElement("td"), { textContent: mmss(p.at) }), Object.assign(document.createElement("td"), { colSpan: 7, textContent: p.error }));
+      return tr;
+    }
+    const slow = baseline && p !== baseline && pageTime(p) > pageTime(baseline) * 2;
+    const cells = [p === baseline ? "baseline" : mmss(p.at), whole.format(p.users), secs(p.ttfb), secs(p.fcp), secs(p.lcp), secs(p.load), bytes(p.bytes || 0), p.requests];
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      if (i === 4 && slow) td.className = "bad";
+      tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+function pageSummary() {
+  const ok = probes.filter((p) => p.ok);
+  if (!ok.length) return {};
+  const peak = ok.slice(1).reduce((best, p) => (!best || p.users > best.users || (p.users === best.users && pageTime(p) > pageTime(best)) ? p : best), null);
+  return { pageAlone: pageTime(ok[0]), pagePeak: peak ? pageTime(peak) : null, pagePeakUsers: peak ? peak.users : null };
+}
+
+function finishRun() {
+  stopProbing();
+  Object.assign(run, pageSummary());
+  run.seconds = (Date.now() - run.startedAt) / 1000;
+  const previous = store.get(LAST_RUN, null);
+  store.set(LAST_RUN, run);
+  showVerdict(run, previous);
+  run = null;
+}
+
+function showVerdict(summary, previous) {
+  const stats = [
+    ["Users held", whole.format(summary.peakUsers)],
+    ["Peak rate", `${compact.format(summary.peakRps)} req/s`],
+    ["P95 at peak", `${Math.round(summary.p95AtPeak)} ms`],
+    ["Worst p95", `${Math.round(summary.maxP95)} ms`],
+    ["Errors after retries", `${pct(summary.errPct)}%`, summary.errPct >= 1],
+    ["First 429", summary.first429 == null ? "none" : `at ${mmss(summary.first429)}`, summary.first429 != null],
+  ];
+  if (summary.pageAlone != null) {
+    const slow = summary.pagePeak != null && (summary.pagePeak > 2500 || summary.pagePeak > summary.pageAlone * 2);
+    stats.push(["Page LCP alone", secs(summary.pageAlone)]);
+    stats.push([summary.pagePeakUsers != null ? `Page LCP at ${whole.format(summary.pagePeakUsers)} users` : "Page LCP under load", secs(summary.pagePeak), slow]);
+  }
+  el("verdict-stats").replaceChildren(...stats.flatMap(([label, value, bad]) => [
+    Object.assign(document.createElement("dt"), { textContent: label }),
+    Object.assign(document.createElement("dd"), { textContent: value, className: bad ? "bad" : "" }),
+  ]));
+
+  const slowed = summary.pageAlone != null && summary.pagePeak != null && (summary.pagePeak > 2500 || summary.pagePeak > summary.pageAlone * 2);
+  el("verdict-title").textContent =
+    summary.first429 != null ? "Throttled by the host"
+    : summary.errPct >= 1 ? "Errors under load"
+    : slowed ? "Slowed down under load"
+    : "Held up";
+  const pageLine = summary.pageAlone != null && summary.pagePeak != null ? ` The page took ${secs(summary.pageAlone)} to show alone and ${secs(summary.pagePeak)} under load.` : "";
+  el("verdict-lede").textContent = `${whole.format(summary.requests)} requests in ${mmss(summary.seconds)} against ${summary.host}.${pageLine}`;
+
+  const prev = el("verdict-prev");
+  if (previous && previous.peakUsers) {
+    prev.textContent = `Previous run: ${whole.format(previous.peakUsers)} users, p95 ${Math.round(previous.p95AtPeak)} ms at peak, ${pct(previous.errPct)}% errors${previous.first429 == null ? "" : `, first 429 at ${mmss(previous.first429)}`}.`;
+    prev.hidden = false;
+  } else {
+    prev.hidden = true;
+  }
+  el("verdict").hidden = false;
+  el("trace").setAttribute("aria-label", `${el("verdict-title").textContent}. ${stats.map(([l, v]) => `${l} ${v}`).join(", ")}.`);
+}
+
+function render(data) {
+  if (Date.now() < launchGraceUntil && !ACTIVE.has(data.state) && !STOPPING.has(data.state)) return;
+  setState(data.state);
+  const stats = data.stats || [];
+  const total = stats.at(-1) || {};
+  const live = ACTIVE.has(data.state);
+  const errors = data.errors || [];
+  const counts = pushback(errors);
+  const err = errorRate(total, counts.retries);
+  const p95 = data.current_response_time_percentiles?.["response_time_percentile_0.95"] || 0;
+  const rps = live ? data.current_rps || 0 : 0;
+
+  if (live) {
+    lastUsers = data.user_count || 0;
+    history.push({ rps, fail: data.current_fail_per_sec || 0, p95 });
+    if (history.length > MAX_POINTS) {
+      history.shift();
+      shifted++;
+      if (firstThrottleIndex != null) firstThrottleIndex--;
+    }
+    trackRun(data, counts, err, p95);
+  }
+
+  dots(el("r-rps"), rps >= 100 ? String(Math.round(rps)) : rps.toFixed(1));
+  dots(el("r-users"), whole.format(live ? data.user_count || 0 : 0));
+  dots(el("r-p95"), String(Math.round(live ? p95 : 0)), "ms");
+  dots(el("r-err"), pct(err.pct), "%");
+  el("r-err").classList.toggle("hot", err.pct >= 1);
+  dots(el("r-429"), whole.format(counts.throttled));
+  el("r-429").classList.toggle("hot", counts.throttled > 0);
+
+  dots(el("s-reqs"), whole.format(err.logical));
+  dots(el("s-fails"), whole.format(err.finalFails));
+  dots(el("s-median"), String(Math.round(total.median_response_time || 0)), "ms");
+  const [size, unit] = bytes((total.num_requests || 0) * (total.avg_content_length || 0)).split(" ");
+  dots(el("s-bytes"), size, unit);
+
+  renderRows(stats);
+  renderPushback(errors, counts);
+
+  const hasData = (total.num_requests || 0) > 0;
+  el("nosignal").hidden = live || hasData || history.length > 0;
+  if (live) el("verdict").hidden = true;
+  if (!live && hasData && el("verdict").hidden && !run) {
+    const last = store.get(LAST_RUN, null);
+    if (last) showVerdict(last, null);
+  }
+  draw();
+}
+
+function niceMax(value) {
+  const exp = Math.pow(10, Math.floor(Math.log10(value)));
+  const f = value / exp;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exp;
+}
+
+const canvas = el("trace");
+const ctx = canvas.getContext("2d");
+const css = getComputedStyle(document.documentElement);
+const color = (name) => css.getPropertyValue(name).trim();
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = { t: 34, r: 18, b: 44, l: 18 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+  const cols = 10, rows = 6;
+
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= cols; i++) {
+    const x = Math.round(pad.l + (pw * i) / cols) + 0.5;
+    ctx.strokeStyle = i === cols / 2 ? "rgba(235,227,212,.09)" : "rgba(235,227,212,.045)";
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke();
+  }
+  for (let j = 0; j <= rows; j++) {
+    const y = Math.round(pad.t + (ph * j) / rows) + 0.5;
+    ctx.strokeStyle = j === rows / 2 ? "rgba(235,227,212,.09)" : "rgba(235,227,212,.045)";
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
+  }
+
+  const span = Math.max(60, history.length);
+  const maxRate = niceMax(Math.max(1, ...history.map((p) => Math.max(p.rps, p.fail))));
+  const plotted = probes.filter((p) => p.ok && p.seq - shifted >= 0);
+  const maxMs = niceMax(Math.max(10, ...history.map((p) => p.p95), ...plotted.map(pageTime)));
+
+  ctx.font = `400 11px ${color("--mono")}`;
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = color("--amber");
+  ctx.textAlign = "left";
+  ctx.fillText(`${compact.format(maxRate)} req/s`, pad.l, pad.t - 16);
+  ctx.fillStyle = color("--cyan");
+  ctx.textAlign = "right";
+  ctx.fillText(`${compact.format(maxMs)} ms`, pad.l + pw, pad.t - 16);
+  if (pw > 420) {
+    ctx.fillStyle = color("--dim");
+    ctx.textAlign = "center";
+    ctx.fillText(`last ${mmss(span)}`, pad.l + pw / 2, pad.t - 16);
+  }
+
+  if (!history.length) return;
+
+  const step = pw / (span - 1);
+  const xAt = (i) => pad.l + (i + (span - history.length)) * step;
+  const yAt = (value, max) => pad.t + ph - (Math.min(value, max) / max) * ph;
+
+  const trace = (pick, max, stroke, { dash = [], glow = 0, fill = false } = {}) => {
+    ctx.save();
+    const path = new Path2D();
+    history.forEach((p, i) => (i ? path.lineTo(xAt(i), yAt(pick(p), max)) : path.moveTo(xAt(i), yAt(pick(p), max))));
+    if (fill && history.length > 1) {
+      const area = new Path2D(path);
+      area.lineTo(xAt(history.length - 1), pad.t + ph);
+      area.lineTo(xAt(0), pad.t + ph);
+      const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
+      grad.addColorStop(0, "rgba(255,178,56,.18)");
+      grad.addColorStop(1, "rgba(255,178,56,0)");
+      ctx.fillStyle = grad;
+      ctx.fill(area);
+    }
+    ctx.setLineDash(dash);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.shadowColor = stroke;
+    ctx.shadowBlur = glow;
+    ctx.stroke(path);
+    ctx.restore();
+  };
+
+  if (firstThrottleIndex != null && firstThrottleIndex >= 0) {
+    const x = Math.round(xAt(firstThrottleIndex)) + 0.5;
+    ctx.save();
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = color("--red");
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color("--red");
+    ctx.textAlign = x > pad.l + pw - 60 ? "right" : "left";
+    ctx.fillText("first 429", x + (ctx.textAlign === "left" ? 6 : -6), pad.t + 12);
+    ctx.restore();
+  }
+
+  trace((p) => p.p95, maxMs, color("--cyan"), { dash: [5, 4] });
+
+  if (plotted.length) {
+    ctx.save();
+    ctx.strokeStyle = color("--green");
+    ctx.fillStyle = color("--green");
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    plotted.forEach((p, i) => {
+      const x = xAt(Math.min(p.seq - shifted, history.length - 1));
+      const y = yAt(pageTime(p), maxMs);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+    for (const p of plotted) {
+      ctx.beginPath();
+      ctx.arc(xAt(Math.min(p.seq - shifted, history.length - 1)), yAt(pageTime(p), maxMs), 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  trace((p) => p.fail, maxRate, color("--red"), { glow: 6 });
+  trace((p) => p.rps, maxRate, color("--amber"), { glow: 10, fill: true });
+
+  const last = history.at(-1);
+  ctx.fillStyle = color("--amber");
+  ctx.shadowColor = color("--amber");
+  ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(xAt(history.length - 1), yAt(last.rps, maxRate), 3, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+async function poll() {
+  try {
+    const response = await fetch("stats/requests", { cache: "no-store" });
+    if (!response.ok) throw new Error(response.statusText);
+    render(await response.json());
+  } catch {
+    setState("offline");
+  }
+}
+
+async function start() {
+  if (launching || ACTIVE.has(state) || STOPPING.has(state)) return;
+  const problem = validate();
+  if (problem) { showError(...problem); return; }
+  clearError();
+  const host = form.elements.host.value.trim().replace(/\/+$/, "");
+  form.elements.host.value = host;
+  persist();
+  rememberHost(host);
+
+  const body = new URLSearchParams();
+  for (const name of SWARM) body.set(name, form.elements[name].value.trim());
+  const runTime = form.elements.run_time.value.trim();
+  if (runTime) body.set("run_time", runTime);
+
+  const fire = el("fire");
+  launching = true;
+  setState(state);
+  probes = [];
+  shifted = 0;
+  history = [];
+  renderProbes();
+  try {
+    if (form.elements.probe.checked) {
+      const baseline = await probeOnce(0);
+      if (!baseline?.ok) {
+        showError(null, `${baseline?.error || "Baseline page load failed."} Starting without page load checks.`);
+      }
+    }
+    await fetch("stats/reset", { method: "POST" });
+    const response = await fetch("swarm", { method: "POST", body });
+    const result = await response.json();
+    if (!result.success) { showError(null, result.message); return; }
+    firstThrottleIndex = null;
+    elapsedAtStop = 0;
+    startedAt = Date.now();
+    run = { host, startedAt, peakUsers: 0, p95AtPeak: 0, peakRps: 0, maxP95: 0, first429: null, requests: 0, attempts: 0, errPct: 0, throttled: 0, retries: 0 };
+    el("verdict").hidden = true;
+    showTarget(host);
+    launchGraceUntil = Date.now() + 4000;
+    setState("spawning");
+    if (probes.some((p) => p.ok)) {
+      probes = probes.map((p) => ({ ...p, seq: 0 }));
+      startProbing();
+    }
+    poll();
+  } catch (error) {
+    showError(null, `Could not reach the load engine: ${error.message}. Close Swarmscope and open it again.`);
+  } finally {
+    launching = false;
+    setState(state);
+  }
+}
+
+async function stop() {
+  setState("stopping");
+  try {
+    await fetch("stop", { method: "POST" });
+  } finally {
+    poll();
+  }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  ACTIVE.has(state) ? stop() : start();
+});
+
+form.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.target.tagName === "TEXTAREA" || event.target.tagName === "BUTTON") return;
+  if (!(event.metaKey || event.ctrlKey)) event.preventDefault();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && ACTIVE.has(state)) { event.preventDefault(); stop(); }
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !ACTIVE.has(state) && !STOPPING.has(state)) { event.preventDefault(); start(); }
+});
+
+form.addEventListener("input", (event) => {
+  estimate();
+  persist();
+  syncPresets();
+  if (event.target.getAttribute("aria-invalid") === "true") {
+    const problem = validate();
+    if (!problem || problem[0] !== event.target.name) clearError();
+  }
+  if (event.target.name === "run_time" && Number.isNaN(seconds(event.target.value))) {
+    showError("run_time", "Duration looks like 90s, 5m or 1h30m. Leave it empty to run until you press Stop.", false);
+  }
+});
+
+for (const button of document.querySelectorAll(".presets .chip-btn")) {
+  button.addEventListener("click", () => {
+    form.elements.user_count.value = button.dataset.users;
+    form.elements.spawn_rate.value = button.dataset.ramp;
+    form.dispatchEvent(new Event("input"));
+  });
+}
+
+el("bar-stop").addEventListener("click", stop);
+el("mod-key").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl";
+new ResizeObserver(draw).observe(canvas);
+
+try {
+  if (!sessionStorage.getItem("swarmscope:seen")) {
+    document.body.classList.add("rise");
+    sessionStorage.setItem("swarmscope:seen", "1");
+  }
+} catch {}
+
+restore();
+estimate();
+syncPresets();
+clock();
+setInterval(clock, 500);
+setInterval(poll, 1000);
+poll();
+</script>
+</body>
+</html>
