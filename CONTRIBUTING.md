@@ -20,7 +20,7 @@ uv run task dev
 
 1. Open an issue first for anything bigger than a small fix, so we can agree on the approach.
 2. Write the failing test first, then the change. Tests live in `tests/`, and anything that touches the engine's routes needs one, since they guard who can reach it.
-3. Keep the panel one self-contained `ui.html` with no build step and no CDN: fonts ship in `assets/fonts`, and every value from the engine goes into the page through `textContent`, never `innerHTML`.
+3. Keep the panel as plain `ui.html`, `ui.css` and `ui.js` with no build step and no CDN: fonts ship in `assets/fonts`, and every value from the engine goes into the page through `textContent`, never `innerHTML`.
 4. Run the checks before opening a pull request:
 
 ```bash
