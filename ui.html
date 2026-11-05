@@ -218,7 +218,7 @@ input:hover, textarea:hover { border-color: var(--tick); }
 input:focus-visible, textarea:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; border-color: var(--amber-deep); }
 input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--red); background: linear-gradient(var(--red-wash), var(--red-wash)), var(--well); }
 
-input[type="number"] { -moz-appearance: textfield; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 .host input { font-size: 15px; padding: 12px; }
@@ -1021,6 +1021,70 @@ function showVerdict(summary, previous) {
   el("trace").setAttribute("aria-label", `${el("verdict-title").textContent}. ${stats.map(([l, v]) => `${l} ${v}`).join(", ")}.`);
 }
 
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const SWEEP_MS = 2600;
+let idleFrame = null;
+
+/** A free-running scope with no input: a faint noisy baseline and a sweeping beam. */
+function drawIdle(pad, pw, ph, now) {
+  const mid = pad.t + ph / 2;
+  const still = reduceMotion.matches;
+  const t = still ? 0 : now;
+  const head = still ? 1 : (t % SWEEP_MS) / SWEEP_MS;
+  const noise = (x) => Math.sin(x * 0.09 + t * 0.004) * 1.4 + Math.sin(x * 0.023 - t * 0.0021) * 2.2 + Math.sin(x * 0.31 + t * 0.011) * 0.6;
+  const amber = color("--amber");
+
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(255,178,56,.16)";
+  ctx.beginPath();
+  for (let x = 0; x <= pw; x += 3) {
+    const y = mid + noise(x);
+    x ? ctx.lineTo(pad.l + x, y) : ctx.moveTo(pad.l, y);
+  }
+  ctx.stroke();
+
+  const headX = head * pw;
+  const tail = Math.min(pw * 0.3, headX);
+  const glow = ctx.createLinearGradient(pad.l + headX - tail, 0, pad.l + headX, 0);
+  glow.addColorStop(0, "rgba(255,178,56,0)");
+  glow.addColorStop(1, amber);
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = amber;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  for (let x = headX - tail; x <= headX; x += 2) {
+    const y = mid + noise(x);
+    x === headX - tail ? ctx.moveTo(pad.l + x, y) : ctx.lineTo(pad.l + x, y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = amber;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.arc(pad.l + headX, mid + noise(headX), 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+let lastScroll = -Infinity;
+let screenOnView = true;
+addEventListener("scroll", () => { lastScroll = performance.now(); }, { passive: true });
+new IntersectionObserver(([entry]) => { screenOnView = entry.isIntersecting; }).observe(document.querySelector(".screen"));
+
+/** Redraws the idle sweep, except while the page is scrolling or the screen is out of view. */
+function idleLoop(now) {
+  idleFrame = null;
+  if (history.length || ACTIVE.has(state)) return;
+  if (screenOnView && now - lastScroll > 150) draw(now);
+  if (!reduceMotion.matches) idleFrame = requestAnimationFrame(idleLoop);
+}
+
+function startIdle() {
+  if (idleFrame == null && !history.length && !ACTIVE.has(state)) idleFrame = requestAnimationFrame(idleLoop);
+}
+
 function render(data) {
   if (Date.now() < launchGraceUntil && !ACTIVE.has(data.state) && !STOPPING.has(data.state)) return;
   setState(data.state);
@@ -1069,6 +1133,7 @@ function render(data) {
     if (last) showVerdict(last, null);
   }
   draw();
+  startIdle();
 }
 
 function niceMax(value) {
@@ -1082,7 +1147,7 @@ const ctx = canvas.getContext("2d");
 const css = getComputedStyle(document.documentElement);
 const color = (name) => css.getPropertyValue(name).trim();
 
-function draw() {
+function draw(now = performance.now()) {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
@@ -1129,7 +1194,10 @@ function draw() {
     ctx.fillText(`last ${mmss(span)}`, pad.l + pw / 2, pad.t - 16);
   }
 
-  if (!history.length) return;
+  if (!history.length) {
+    drawIdle(pad, pw, ph, now);
+    return;
+  }
 
   const step = pw / (span - 1);
   const xAt = (i) => pad.l + (i + (span - history.length)) * step;
@@ -1321,7 +1389,7 @@ for (const link of document.querySelectorAll(".links a")) {
   url.searchParams.set("token", accessToken);
   link.href = url.href;
 }
-new ResizeObserver(draw).observe(canvas);
+new ResizeObserver(() => draw()).observe(canvas);
 
 try {
   if (!sessionStorage.getItem("swarmscope:seen")) {
@@ -1337,6 +1405,8 @@ clock();
 setInterval(clock, 500);
 setInterval(poll, 1000);
 poll();
+startIdle();
+reduceMotion.addEventListener("change", startIdle);
 </script>
 </body>
 </html>
