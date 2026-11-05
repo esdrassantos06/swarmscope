@@ -1,11 +1,16 @@
+import hmac
 import json
+import logging
+import os
 import random
+import secrets
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlencode
 
 import gevent
-from flask import jsonify, request, send_file, send_from_directory
+from flask import Response, jsonify, redirect, request, send_from_directory
 from gevent.lock import BoundedSemaphore
 from locust import events, task
 from locust.contrib.fasthttp import FastHttpUser
@@ -17,6 +22,11 @@ CONTROL_PANEL = Path(__file__).with_name("ui.html")
 FONTS = Path(__file__).with_name("assets") / "fonts"
 APP_SCRIPT = Path(__file__).with_name("app.py")
 PROBE_SLOT = BoundedSemaphore(1)
+TOKEN_ENV = "SWARMSCOPE_TOKEN"
+TOKEN_COOKIE = "swarmscope_token"
+TOKEN_PLACEHOLDER = "__SWARMSCOPE_TOKEN__"
+
+logger = logging.getLogger(__name__)
 
 
 def run_probe(url: str) -> dict:
@@ -57,22 +67,67 @@ def probe_endpoint():
         PROBE_SLOT.release()
 
 
+def same_token(offered: str, token: str) -> bool:
+    return hmac.compare_digest(offered.encode(), token.encode())
+
+
+def access_guard(token: str, port: int):
+    """Flask `before_request` hook that only lets Swarmscope's own window through.
+
+    The window opens `/ui?token=...`; that GET sets a SameSite=Strict, HttpOnly cookie
+    and redirects to the same URL without the token. Every other request, Locust's own
+    routes included, needs that cookie and a loopback Host. A web page in the user's
+    browser has neither, so it can't start, stop or probe anything (CSRF), and a
+    rebound DNS name fails the Host check.
+    """
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+    refused = Response(
+        "Open Swarmscope from its own window.", 403, mimetype="text/plain"
+    )
+
+    def guard():
+        if request.host not in hosts:
+            return refused
+        offered = request.args.get("token")
+        if offered is not None and request.method == "GET":
+            if not same_token(offered, token):
+                return refused
+            rest = urlencode(
+                [(k, v) for k, v in request.args.items(multi=True) if k != "token"]
+            )
+            response = redirect(f"{request.path}?{rest}" if rest else request.path)
+            response.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="Strict")
+            return response
+        if not same_token(request.cookies.get(TOKEN_COOKIE, ""), token):
+            return refused
+        return None
+
+    return guard
+
+
 @events.init.add_listener
 def mount_control_panel(environment, **_kwargs):
-    """Serve the Swarmscope control panel at /ui next to Locust's own web UI."""
+    """Serve the Swarmscope control panel at /ui and lock the engine to its window."""
     if environment.web_ui is None:
         return
-    environment.web_ui.app.add_url_rule(
-        "/ui", "swarmscope_ui", lambda: send_file(CONTROL_PANEL, mimetype="text/html")
+    app = environment.web_ui.app
+    port = environment.parsed_options.web_port
+    token = os.environ.get(TOKEN_ENV)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        logger.warning("Swarmscope panel: http://127.0.0.1:%s/ui?token=%s", port, token)
+    app.before_request(access_guard(token, port))
+
+    panel = CONTROL_PANEL.read_text(encoding="utf-8").replace(TOKEN_PLACEHOLDER, token)
+    app.add_url_rule(
+        "/ui", "swarmscope_ui", lambda: Response(panel, mimetype="text/html")
     )
-    environment.web_ui.app.add_url_rule(
+    app.add_url_rule(
         "/ui/fonts/<path:name>",
         "swarmscope_fonts",
         lambda name: send_from_directory(FONTS, name, max_age=31536000),
     )
-    environment.web_ui.app.add_url_rule(
-        "/ui/probe", "swarmscope_probe", probe_endpoint, methods=["POST"]
-    )
+    app.add_url_rule("/ui/probe", "swarmscope_probe", probe_endpoint, methods=["POST"])
 
 
 @events.init_command_line_parser.add_listener

@@ -8,6 +8,7 @@ executable with `--serve <port>`.
 import atexit
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -65,6 +66,11 @@ def child_command(
     return [*head, SERVE_FLAG, str(port), str(parent_pid)]
 
 
+def child_env(token: str, base: dict[str, str]) -> dict[str, str]:
+    """Environment for the engine. The token goes here, not in argv, so `ps` can't show it."""
+    return {**base, "SWARMSCOPE_TOKEN": token}
+
+
 def free_port() -> int:
     with socket.socket() as sock:
         sock.bind((HOST, 0))
@@ -74,7 +80,10 @@ def free_port() -> int:
 def wait_until_ready(
     url: str, alive: Callable[[], bool], timeout: float, interval: float = 0.15
 ) -> bool:
-    """Poll `url` until it answers. False if `alive()` turns false or `timeout` seconds pass."""
+    """Poll `url` until the server answers at all (any HTTP status counts).
+
+    False if `alive()` turns false or `timeout` seconds pass.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not alive():
@@ -82,6 +91,8 @@ def wait_until_ready(
         try:
             with urllib.request.urlopen(url, timeout=1):
                 return True
+        except urllib.error.HTTPError:
+            return True
         except (urllib.error.URLError, OSError):
             time.sleep(interval)
     return False
@@ -129,6 +140,7 @@ def run_window() -> None:
     import webview
 
     port = free_port()
+    token = secrets.token_urlsafe(32)
     command = child_command(
         port,
         os.getpid(),
@@ -138,12 +150,13 @@ def run_window() -> None:
     )
     child = subprocess.Popen(
         command,
+        env=child_env(token, dict(os.environ)),
         stdin=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     atexit.register(stop, child)
 
-    url = f"http://{HOST}:{port}/ui"
+    url = f"http://{HOST}:{port}/ui?token={token}"
     window_options = {
         "width": 1440,
         "height": 920,

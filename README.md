@@ -84,7 +84,11 @@ The panel also runs on plain Locust in a browser:
 uv run locust
 ```
 
-Open http://localhost:8089/ui. Locust's stock UI stays at http://localhost:8089 with the same fields under "Custom parameters". Past about 2,000 users, `uv run locust --processes -1` spreads the load across every core.
+Open the `Swarmscope panel: http://127.0.0.1:8089/ui?token=...` link that Locust prints when it starts. Locust's stock UI stays at http://127.0.0.1:8089 with the same fields under "Custom parameters". Past about 2,000 users, `uv run locust --processes -1` spreads the load across every core.
+
+## Who can reach the engine
+
+The engine only listens on 127.0.0.1, and every request to it needs a token that changes on each launch. The desktop app passes it to its own window, and `uv run locust` prints it in the link above. The token's link sets a `SameSite=Strict` cookie, so a website open in your browser can't start, stop or redirect a load test from your machine, and a request that arrives under a different hostname is refused.
 
 Headless, same settings:
 

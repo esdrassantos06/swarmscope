@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<meta name="swarmscope-token" content="__SWARMSCOPE_TOKEN__">
 <title>Swarmscope</title>
 <link rel="preload" href="ui/fonts/doto.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="ui/fonts/martian-mono.woff2" as="font" type="font/woff2" crossorigin>
@@ -1314,6 +1315,12 @@ for (const button of document.querySelectorAll(".presets .chip-btn")) {
 
 el("bar-stop").addEventListener("click", stop);
 el("mod-key").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl";
+const accessToken = document.querySelector('meta[name="swarmscope-token"]').content;
+for (const link of document.querySelectorAll(".links a")) {
+  const url = new URL(link.getAttribute("href"), location.href);
+  url.searchParams.set("token", accessToken);
+  link.href = url.href;
+}
 new ResizeObserver(draw).observe(canvas);
 
 try {

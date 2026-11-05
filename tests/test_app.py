@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app import child_command, free_port, serve_argv, wait_until_ready
+from app import child_command, child_env, free_port, serve_argv, wait_until_ready
 
 
 class Ok(BaseHTTPRequestHandler):
@@ -107,3 +107,31 @@ def test_exit_when_gone_fires_after_parent_process_exits():
     finally:
         parent.kill()
         watcher.kill()
+
+
+class Forbidden(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(403)
+        self.end_headers()
+
+    def log_message(self, *_args):
+        pass
+
+
+def test_wait_until_ready_counts_a_refusal_as_up():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Forbidden)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/ui"
+        assert wait_until_ready(url, alive=lambda: True, timeout=5) is True
+    finally:
+        server.shutdown()
+
+
+def test_child_env_carries_the_token_without_putting_it_in_argv():
+    env = child_env("abc123", {"PATH": "/bin"})
+
+    assert env == {"PATH": "/bin", "SWARMSCOPE_TOKEN": "abc123"}
+    assert "abc123" not in child_command(
+        4321, 99, frozen=True, executable="/x", script="y"
+    )
