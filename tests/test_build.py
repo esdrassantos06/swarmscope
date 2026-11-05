@@ -30,14 +30,17 @@ def test_pyinstaller_args_use_absolute_paths_so_any_cwd_works():
 
 
 @pytest.mark.parametrize(
-    "machine,expected", [("arm64", "--target-arch=arm64"), ("x86_64", "--target-arch=x86_64")]
+    "machine,expected",
+    [("arm64", "--target-arch=arm64"), ("x86_64", "--target-arch=x86_64")],
 )
 def test_mac_builds_target_the_cpu_they_run_on(machine, expected):
     assert expected in build.pyinstaller_args("darwin", machine)
 
 
 def test_windows_builds_set_no_target_arch():
-    assert not any(a.startswith("--target-arch") for a in build.pyinstaller_args("win32", "AMD64"))
+    assert not any(
+        a.startswith("--target-arch") for a in build.pyinstaller_args("win32", "AMD64")
+    )
 
 
 def test_open_app_explains_how_to_build_when_missing(monkeypatch, tmp_path):
