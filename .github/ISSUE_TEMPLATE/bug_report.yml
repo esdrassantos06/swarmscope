@@ -1,0 +1,36 @@
+name: Bug report
+description: Something doesn't work as the README says
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Run settings
+      description: Users, ramp, duration, delays, retries, and whether the page probe was on. Leave out private URLs if you'd rather.
+  - type: input
+    id: version
+    attributes:
+      label: Swarmscope version and download
+      placeholder: "0.1.0, Swarmscope-macos-arm64.dmg"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: "macOS 26.1 on an M2, or Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error text
+      description: Anything the panel showed in red, or the Pushback list.
+      render: text

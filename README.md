@@ -2,6 +2,8 @@
 
 Find out how many users your site takes before it slows down, and whether it's your site or your host that gives way first. Swarmscope is a desktop app for macOS (Apple Silicon) and Windows that drives [Locust](https://locust.io) from one panel: you set the URL and the crowd, it plots req/s, p95 and errors live, opens the page in a real browser every 15 seconds to time how fast it actually shows up, keeps the host's throttling (HTTP 429) apart from your site's own failures, and ends each run with a verdict: users held, page load alone versus under load, errors after retries, and when the first 429 hit.
 
+Point it only at sites you own or have permission to test. Swarmscope sends real traffic, and to the host on the other end a big run looks the same as an attack.
+
 One thing it can't do: load traffic never runs JavaScript, so Google Analytics won't see these visits. To check analytics, open the site in a few real browsers or send GA4 Measurement Protocol events.
 
 ## Commands
@@ -129,3 +131,7 @@ uv run task test
 ```
 
 `uv run ruff check --fix .` fixes what it safely can. The ruff rules live in `pyproject.toml`, so the result is the same on every machine and in CI, which runs the lint, a format check and the tests before building.
+
+## License
+
+[MIT](LICENSE). The bundled fonts, Doto and Martian Mono, are under the SIL Open Font License; their license files ship in `assets/fonts`.
