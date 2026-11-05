@@ -19,6 +19,7 @@ from probe import probe_command
 from retry import fetch_with_retry, parse_paths
 
 CONTROL_PANEL = Path(__file__).with_name("ui.html")
+PANEL_DIR = CONTROL_PANEL.parent
 FONTS = Path(__file__).with_name("assets") / "fonts"
 APP_SCRIPT = Path(__file__).with_name("app.py")
 PROBE_SLOT = BoundedSemaphore(1)
@@ -121,6 +122,11 @@ def mount_control_panel(environment, **_kwargs):
     panel = CONTROL_PANEL.read_text(encoding="utf-8").replace(TOKEN_PLACEHOLDER, token)
     app.add_url_rule(
         "/ui", "swarmscope_ui", lambda: Response(panel, mimetype="text/html")
+    )
+    app.add_url_rule(
+        "/ui/<any(ui.css, ui.js):name>",
+        "swarmscope_assets",
+        lambda name: send_from_directory(PANEL_DIR, name),
     )
     app.add_url_rule(
         "/ui/fonts/<path:name>",

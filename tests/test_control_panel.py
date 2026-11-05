@@ -147,3 +147,23 @@ def test_without_the_app_a_token_is_generated_and_logged(monkeypatch, caplog):
 
     assert "http://127.0.0.1:8089/ui?token=" in caplog.text
     assert app.test_client().get("/ui", base_url=LOCAL).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "name,mimetype,marker",
+    [("ui.css", "text/css", b":root"), ("ui.js", "text/javascript", b"function draw")],
+)
+def test_panel_styles_and_script_are_served_after_signing_in(
+    app, name, mimetype, marker
+):
+    assert app.test_client().get(f"/ui/{name}", base_url=LOCAL).status_code == 403
+
+    response = signed_in(app).get(f"/ui/{name}", base_url=LOCAL)
+
+    assert response.status_code == 200
+    assert response.mimetype == mimetype
+    assert marker in response.data
+
+
+def test_only_the_panel_assets_are_served_next_to_it(app):
+    assert signed_in(app).get("/ui/locustfile.py", base_url=LOCAL).status_code == 404

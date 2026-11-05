@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-BUNDLED_FILES = ["locustfile.py", "probe.py", "retry.py", "ui.html"]
+BUNDLED_FILES = ["locustfile.py", "probe.py", "retry.py", "ui.html", "ui.css", "ui.js"]
 
 
 def app_path(platform: str = sys.platform) -> Path:
