@@ -13,8 +13,13 @@ jobs:
         include:
           - os: macos-latest
             artifact: Swarmscope-macos-arm64
+            package: dmg
+          - os: macos-15-intel
+            artifact: Swarmscope-macos-intel
+            package: zip
           - os: windows-latest
             artifact: Swarmscope-windows-x64
+            package: zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,8 +36,16 @@ jobs:
 
       - run: uv run python build.py
 
-      - name: Zip macOS app
-        if: runner.os == 'macOS'
+      - name: Disk image for Apple Silicon
+        if: matrix.package == 'dmg'
+        run: |
+          mkdir dmg
+          cp -R dist/Swarmscope.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Swarmscope -srcfolder dmg -ov -format UDZO ${{ matrix.artifact }}.dmg
+
+      - name: Zip Intel Mac app
+        if: runner.os == 'macOS' && matrix.package == 'zip'
         run: ditto -c -k --keepParent dist/Swarmscope.app ${{ matrix.artifact }}.zip
 
       - name: Zip Windows app
@@ -42,4 +55,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          path: ${{ matrix.artifact }}.${{ matrix.package }}

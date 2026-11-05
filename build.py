@@ -1,10 +1,13 @@
 """Build and open the Swarmscope desktop app (`task build`, `task open`).
 
 macOS gives dist/Swarmscope.app, Windows gives dist/Swarmscope/Swarmscope.exe.
-PyInstaller cannot cross-compile, so build each OS on that OS (or in CI).
+PyInstaller cannot cross-compile, so each build matches the OS and CPU it runs on:
+an Apple Silicon Mac gives an arm64 app, an Intel Mac (or `arch -x86_64` with an
+x86_64 Python under Rosetta) gives an x86_64 one.
 """
 
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +23,9 @@ def app_path(platform: str = sys.platform) -> Path:
     return ROOT / "dist" / "Swarmscope" / "Swarmscope.exe"
 
 
-def pyinstaller_args(platform: str = sys.platform) -> list[str]:
+def pyinstaller_args(
+    os_name: str = sys.platform, machine: str = platform.machine()
+) -> list[str]:
     args = [
         str(ROOT / "app.py"),
         "--name=Swarmscope",
@@ -39,8 +44,8 @@ def pyinstaller_args(platform: str = sys.platform) -> list[str]:
         *[f"--add-data={ROOT / name}{os.pathsep}." for name in BUNDLED_FILES],
         f"--add-data={ROOT / 'assets' / 'fonts'}{os.pathsep}assets/fonts",
     ]
-    if platform == "darwin":
-        args.append("--target-arch=arm64")
+    if os_name == "darwin":
+        args.append(f"--target-arch={machine}")
     return args
 
 

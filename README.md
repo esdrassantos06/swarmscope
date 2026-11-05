@@ -19,7 +19,17 @@ The project's commands live in `pyproject.toml` under `[tool.taskipy.tasks]`, li
 
 ## Desktop app
 
-Build it on the machine you'll run it on:
+The app carries everything it runs on: Python, Locust, the window and the page probe's driver. Whoever downloads it doesn't install anything, except that the real-browser page check drives the Chrome or Edge already on the machine (every Windows PC has Edge; on a Mac without Chrome the load test still runs, only the page check is skipped).
+
+| Download | Runs on |
+|---|---|
+| `Swarmscope-macos-arm64.dmg` | Macs with Apple Silicon (M1 and later). Open it and drag Swarmscope to Applications. |
+| `Swarmscope-macos-intel.zip` | Intel Macs. It also opens on Apple Silicon through Rosetta, but scrolling feels heavier there, so use the DMG on those Macs. |
+| `Swarmscope-windows-x64.zip` | Windows 10 and 11, 64-bit |
+
+The `build` workflow in `.github/workflows` makes all three: push a `v*` tag or start it by hand from the Actions tab, then grab the zips from the run. Ship those rather than a build from your own Mac: a local build bundles your local Python, which may need a newer macOS than your users have.
+
+To build on your own machine instead:
 
 ```bash
 uv sync
@@ -29,7 +39,15 @@ uv sync
 uv run task build
 ```
 
-macOS gives you `dist/Swarmscope.app`. Windows gives you `dist/Swarmscope/Swarmscope.exe`. PyInstaller can't cross-compile, so the Windows build has to happen on Windows. The `build` workflow in `.github/workflows` does both: push a `v*` tag or start it by hand from the Actions tab, then download the zips from the run.
+PyInstaller can't cross-compile, so each build matches the machine it runs on: an Apple Silicon Mac gives `dist/Swarmscope.app` for Apple Silicon, an Intel Mac gives one for Intel, and Windows gives `dist/Swarmscope/Swarmscope.exe`. An Apple Silicon Mac can still produce the Intel app through Rosetta, with an x86_64 Python in its own environment:
+
+```bash
+UV_PROJECT_ENVIRONMENT=.venv-intel uv sync --python cpython-3.13-macos-x86_64-none
+```
+
+```bash
+arch -x86_64 .venv-intel/bin/python build.py
+```
 
 The builds aren't signed. On a Mac, a copy downloaded from CI needs its quarantine flag cleared once:
 

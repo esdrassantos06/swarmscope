@@ -23,12 +23,21 @@ def test_app_path_points_at_the_built_app(platform, expected):
 
 
 def test_pyinstaller_args_use_absolute_paths_so_any_cwd_works():
-    args = build.pyinstaller_args("darwin")
+    args = build.pyinstaller_args("darwin", "arm64")
 
     assert args[0] == str(ROOT / "app.py")
     assert f"--icon={ROOT / 'assets' / 'icon.png'}" in args
-    assert "--target-arch=arm64" in args
-    assert "--target-arch=arm64" not in build.pyinstaller_args("win32")
+
+
+@pytest.mark.parametrize(
+    "machine,expected", [("arm64", "--target-arch=arm64"), ("x86_64", "--target-arch=x86_64")]
+)
+def test_mac_builds_target_the_cpu_they_run_on(machine, expected):
+    assert expected in build.pyinstaller_args("darwin", machine)
+
+
+def test_windows_builds_set_no_target_arch():
+    assert not any(a.startswith("--target-arch") for a in build.pyinstaller_args("win32", "AMD64"))
 
 
 def test_open_app_explains_how_to_build_when_missing(monkeypatch, tmp_path):
